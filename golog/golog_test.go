@@ -101,10 +101,10 @@ func TestCheckErr(t *testing.T) {
 	buf, cleanup := setupTestLogger(true)
 	defer cleanup()
 
-	err := CheckErr(nil, "No error")
+	err := CheckErr(nil, "No error", false)
 	assert.False(t, err) // Should return false for no error
 
-	err = CheckErr(assert.AnError, "Error happened")
+	err = CheckErr(assert.AnError, "Error happened", false)
 	assert.True(t, err) // Should return true if an error occurred
 
 	logOutput := buf.String()

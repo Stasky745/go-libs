@@ -109,9 +109,11 @@ func Panicf(template string, args ...interface{}) {
 }
 
 // CheckErr checks if an error is nil. If not, it logs it and optionally exits the program.
-func CheckErr(err error, message string) bool {
+func CheckErr(err error, message string, panic bool) bool {
 	if err != nil {
-		// Log the error message with the error details
+		if panic {
+			GetLogger().sugaredLogger.DPanicf("%s: %v", message, err)
+		}
 		GetLogger().sugaredLogger.Errorf("%s: %v", message, err)
 		return true
 	}
