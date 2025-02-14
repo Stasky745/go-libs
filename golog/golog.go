@@ -1,5 +1,4 @@
-// golog/golog.go
-package main
+package golog
 
 import (
 	"sync"
