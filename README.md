@@ -1,2 +1,2 @@
-# golog
-Logging library to simplify the use of uber/zap
+# GO Libraries
+Different libraries I use to keep things simple and tidy.

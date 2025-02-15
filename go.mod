@@ -1,4 +1,4 @@
-module github.com/Stasky745/go-tools
+module github.com/Stasky745/go-libs
 
 go 1.22.5
 
