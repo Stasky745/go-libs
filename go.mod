@@ -1,4 +1,4 @@
-module github.com/Stasky745/golog
+module github.com/Stasky745/go-tools
 
 go 1.22.5
 
