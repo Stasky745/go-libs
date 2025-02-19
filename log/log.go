@@ -1,6 +1,9 @@
 package log
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httputil"
 	"sync"
 
 	"go.uber.org/zap"
@@ -111,10 +114,30 @@ func Panicf(template string, args ...interface{}) {
 // CheckErr checks if an error is nil. If not, it logs it and optionally exits the program.
 func CheckErr(err error, panic bool, message string, keysAndValues ...interface{}) bool {
 	if err != nil {
-		if panic {
-			GetLogger().sugaredLogger.Panicw(message, "error", err, keysAndValues)
+		// Create a new slice to hold the modified keysAndValues
+		newKeysAndValues := make([]interface{}, 0, len(keysAndValues))
+
+		// Iterate through keysAndValues, checking for *http.Response
+		for i := 0; i < len(keysAndValues); i += 2 { // Increment by 2 as they are key-value pairs
+			key := keysAndValues[i]
+			value := keysAndValues[i+1]
+
+			if resp, ok := value.(*http.Response); ok {
+				dump, err := httputil.DumpResponse(resp, true)
+				if CheckErr(err, false, "can't dump HTTP response", "response", resp) {
+					newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", err)) // Store error message
+				} else {
+					newKeysAndValues = append(newKeysAndValues, key, string(dump))
+				}
+			} else {
+				newKeysAndValues = append(newKeysAndValues, key, value) // Use original key-value
+			}
 		}
-		GetLogger().sugaredLogger.Errorw(message, "error", err, keysAndValues)
+
+		if panic {
+			GetLogger().sugaredLogger.Panicw(message, "error", err, newKeysAndValues) // Use the modified slice with spread operator
+		}
+		GetLogger().sugaredLogger.Errorw(message, "error", err, newKeysAndValues) // Use the modified slice with spread operator
 		return true
 	}
 	return false
