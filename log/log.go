@@ -111,43 +111,68 @@ func Panicf(template string, args ...interface{}) {
 	GetLogger().sugaredLogger.Panicf(template, args...)
 }
 
-// CheckErr checks if an error is nil. If not, it logs it and optionally exits the program.
-func CheckErr(parentError error, panic bool, message string, keysAndValues ...interface{}) bool {
-	if parentError == nil {
+// CheckErr logs an error and optionally panics if the `shouldPanic` flag is set.
+//
+// This function is designed to handle errors consistently by logging them in a structured manner.
+// It supports key-value pairs for additional context and has special handling for *http.Response
+// values, dumping their contents for better debugging.
+//
+// Behavior:
+// - If `err` is nil, the function returns false and does nothing.
+// - If `err` is not nil, it logs the error using the structured logger (`zap.SugaredLogger`).
+// - If `shouldPanic` is true, it logs the error as a panic and terminates the program.
+// - If `keysAndValues` contains an *http.Response, it dumps the response body for debugging.
+//
+// Parameters:
+// - `err` (error): The error to check and log. If nil, the function exits early.
+// - `shouldPanic` (bool): If true, logs the error as a panic and terminates the program.
+// - `message` (string): A descriptive error message for the log entry.
+// - `keysAndValues` (variadic interface{}): Optional key-value pairs providing context.
+//   - If a value is an *http.Response, the response body is dumped for easier debugging.
+//   - If an odd number of arguments is provided, a placeholder `"<missing value>"` is added.
+//
+// Returns:
+// - `bool`: Returns true if an error was logged, false otherwise.
+func CheckErr(err error, shouldPanic bool, message string, keysAndValues ...interface{}) bool {
+	if err == nil {
 		return false
 	}
 
-	// Create a new slice to hold the modified keysAndValues
+	// Ensure keysAndValues has an even number of elements
+	if len(keysAndValues)%2 != 0 {
+		keysAndValues = append(keysAndValues, "<missing value>")
+	}
+
+	// Create a new slice to store processed key-value pairs
 	newKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
 
-	// Iterate through keysAndValues, checking for *http.Response
-	for i := 0; i < len(keysAndValues); i += 2 { // Increment by 2 as they are key-value pairs
-		key := keysAndValues[i]
-		// Check if there's a corresponding value before accessing it
-		var value interface{} = "<missing value>" // Default in case of missing pair
-		if i+1 < len(keysAndValues) {
-			value = keysAndValues[i+1]
-		}
+	// Prepend the error itself
+	newKeysAndValues = append(newKeysAndValues, "error", err)
+
+	// Process key-value pairs
+	for i := 0; i < len(keysAndValues); i += 2 {
+		key, value := keysAndValues[i], keysAndValues[i+1]
 
 		if resp, ok := value.(*http.Response); ok {
-			dump, err := httputil.DumpResponse(resp, true)
-			if CheckErr(err, false, "can't dump HTTP response", "response", resp) {
-				newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", err)) // Store error message
+			dump, dumpErr := httputil.DumpResponse(resp, true)
+			if dumpErr != nil {
+				GetLogger().sugaredLogger.Warnw("Failed to dump HTTP response", "error", dumpErr)
+				newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", dumpErr))
 			} else {
 				newKeysAndValues = append(newKeysAndValues, key, string(dump))
 			}
 		} else {
-			newKeysAndValues = append(newKeysAndValues, key, value) // Use original key-value
+			newKeysAndValues = append(newKeysAndValues, key, value)
 		}
 	}
 
-	// We add the error as the first values within
-	newKeysAndValues = append([]interface{}{"error", parentError}, newKeysAndValues...)
-
-	if panic {
-		GetLogger().sugaredLogger.Panicw(message, newKeysAndValues) // Use the modified slice with spread operator
+	// Log the error
+	logger := GetLogger().sugaredLogger
+	if shouldPanic {
+		logger.Panicw(message, newKeysAndValues...)
+	} else {
+		logger.Errorw(message, newKeysAndValues...)
 	}
 
-	GetLogger().sugaredLogger.Errorw(message, newKeysAndValues) // Use the modified slice with spread operator
 	return true
 }
