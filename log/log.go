@@ -112,8 +112,8 @@ func Panicf(template string, args ...interface{}) {
 }
 
 // CheckErr checks if an error is nil. If not, it logs it and optionally exits the program.
-func CheckErr(err error, panic bool, message string, keysAndValues ...interface{}) bool {
-	if err == nil {
+func CheckErr(parentError error, panic bool, message string, keysAndValues ...interface{}) bool {
+	if parentError == nil {
 		return false
 	}
 
@@ -142,7 +142,7 @@ func CheckErr(err error, panic bool, message string, keysAndValues ...interface{
 	}
 
 	// We add the error as the first values within
-	newKeysAndValues = append([]interface{}{"error", err}, newKeysAndValues...)
+	newKeysAndValues = append([]interface{}{"error", parentError}, newKeysAndValues...)
 
 	if panic {
 		GetLogger().sugaredLogger.Panicw(message, newKeysAndValues) // Use the modified slice with spread operator
