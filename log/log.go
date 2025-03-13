@@ -115,12 +115,16 @@ func Panicf(template string, args ...interface{}) {
 func CheckErr(err error, panic bool, message string, keysAndValues ...interface{}) bool {
 	if err != nil {
 		// Create a new slice to hold the modified keysAndValues
-		newKeysAndValues := make([]interface{}, 0, len(keysAndValues))
+		newKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
 
 		// Iterate through keysAndValues, checking for *http.Response
 		for i := 0; i < len(keysAndValues); i += 2 { // Increment by 2 as they are key-value pairs
 			key := keysAndValues[i]
-			value := keysAndValues[i+1]
+			// Check if there's a corresponding value before accessing it
+			var value interface{} = "<missing value>" // Default in case of missing pair
+			if i+1 < len(keysAndValues) {
+				value = keysAndValues[i+1]
+			}
 
 			if resp, ok := value.(*http.Response); ok {
 				dump, err := httputil.DumpResponse(resp, true)
@@ -134,10 +138,14 @@ func CheckErr(err error, panic bool, message string, keysAndValues ...interface{
 			}
 		}
 
+		// We add the error as the first values within
+		newKeysAndValues = append([]interface{}{"error", err}, newKeysAndValues...)
+
 		if panic {
-			GetLogger().sugaredLogger.Panicw(message, "error", err, newKeysAndValues) // Use the modified slice with spread operator
+			GetLogger().sugaredLogger.Panicw(message, newKeysAndValues) // Use the modified slice with spread operator
 		}
-		GetLogger().sugaredLogger.Errorw(message, "error", err, newKeysAndValues) // Use the modified slice with spread operator
+
+		GetLogger().sugaredLogger.Errorw(message, newKeysAndValues) // Use the modified slice with spread operator
 		return true
 	}
 	return false
