@@ -113,40 +113,41 @@ func Panicf(template string, args ...interface{}) {
 
 // CheckErr checks if an error is nil. If not, it logs it and optionally exits the program.
 func CheckErr(err error, panic bool, message string, keysAndValues ...interface{}) bool {
-	if err != nil {
-		// Create a new slice to hold the modified keysAndValues
-		newKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
-
-		// Iterate through keysAndValues, checking for *http.Response
-		for i := 0; i < len(keysAndValues); i += 2 { // Increment by 2 as they are key-value pairs
-			key := keysAndValues[i]
-			// Check if there's a corresponding value before accessing it
-			var value interface{} = "<missing value>" // Default in case of missing pair
-			if i+1 < len(keysAndValues) {
-				value = keysAndValues[i+1]
-			}
-
-			if resp, ok := value.(*http.Response); ok {
-				dump, err := httputil.DumpResponse(resp, true)
-				if CheckErr(err, false, "can't dump HTTP response", "response", resp) {
-					newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", err)) // Store error message
-				} else {
-					newKeysAndValues = append(newKeysAndValues, key, string(dump))
-				}
-			} else {
-				newKeysAndValues = append(newKeysAndValues, key, value) // Use original key-value
-			}
-		}
-
-		// We add the error as the first values within
-		newKeysAndValues = append([]interface{}{"error", err}, newKeysAndValues...)
-
-		if panic {
-			GetLogger().sugaredLogger.Panicw(message, newKeysAndValues) // Use the modified slice with spread operator
-		}
-
-		GetLogger().sugaredLogger.Errorw(message, newKeysAndValues) // Use the modified slice with spread operator
-		return true
+	if err == nil {
+		return false
 	}
-	return false
+
+	// Create a new slice to hold the modified keysAndValues
+	newKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
+
+	// Iterate through keysAndValues, checking for *http.Response
+	for i := 0; i < len(keysAndValues); i += 2 { // Increment by 2 as they are key-value pairs
+		key := keysAndValues[i]
+		// Check if there's a corresponding value before accessing it
+		var value interface{} = "<missing value>" // Default in case of missing pair
+		if i+1 < len(keysAndValues) {
+			value = keysAndValues[i+1]
+		}
+
+		if resp, ok := value.(*http.Response); ok {
+			dump, err := httputil.DumpResponse(resp, true)
+			if CheckErr(err, false, "can't dump HTTP response", "response", resp) {
+				newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", err)) // Store error message
+			} else {
+				newKeysAndValues = append(newKeysAndValues, key, string(dump))
+			}
+		} else {
+			newKeysAndValues = append(newKeysAndValues, key, value) // Use original key-value
+		}
+	}
+
+	// We add the error as the first values within
+	newKeysAndValues = append([]interface{}{"error", err}, newKeysAndValues...)
+
+	if panic {
+		GetLogger().sugaredLogger.Panicw(message, newKeysAndValues) // Use the modified slice with spread operator
+	}
+
+	GetLogger().sugaredLogger.Errorw(message, newKeysAndValues) // Use the modified slice with spread operator
+	return true
 }
