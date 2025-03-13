@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"sync"
@@ -111,25 +110,16 @@ func Panicf(template string, args ...interface{}) {
 	GetLogger().sugaredLogger.Panicf(template, args...)
 }
 
-// CheckErr logs an error and optionally panics if the `shouldPanic` flag is set.
+// CheckErr logs an error and optionally panics if `shouldPanic` is true.
 //
-// This function is designed to handle errors consistently by logging them in a structured manner.
-// It supports key-value pairs for additional context and has special handling for *http.Response
-// values, dumping their contents for better debugging.
-//
-// Behavior:
-// - If `err` is nil, the function returns false and does nothing.
-// - If `err` is not nil, it logs the error using the structured logger (`zap.SugaredLogger`).
-// - If `shouldPanic` is true, it logs the error as a panic and terminates the program.
-// - If `keysAndValues` contains an *http.Response, it dumps the response body for debugging.
+// It supports key-value pairs for additional context and automatically dumps *http.Response bodies for debugging.
 //
 // Parameters:
-// - `err` (error): The error to check and log. If nil, the function exits early.
-// - `shouldPanic` (bool): If true, logs the error as a panic and terminates the program.
-// - `message` (string): A descriptive error message for the log entry.
-// - `keysAndValues` (variadic interface{}): Optional key-value pairs providing context.
-//   - If a value is an *http.Response, the response body is dumped for easier debugging.
-//   - If an odd number of arguments is provided, a placeholder `"<missing value>"` is added.
+// - `err` (error): The error to check and log. If nil, the function returns false and exits early.
+// - `shouldPanic` (bool): If true, logs the error as a panic and terminates execution.
+// - `message` (string): A descriptive error message for logging.
+// - `keysAndValues` (variadic interface{}): Optional key-value pairs for structured logging.
+//   - If a value is an *http.Response, the response body is dumped.
 //
 // Returns:
 // - `bool`: Returns true if an error was logged, false otherwise.
@@ -138,40 +128,35 @@ func CheckErr(err error, shouldPanic bool, message string, keysAndValues ...inte
 		return false
 	}
 
-	// Ensure keysAndValues has an even number of elements
+	// Ensure `keysAndValues` always has an even number of elements
 	if len(keysAndValues)%2 != 0 {
 		keysAndValues = append(keysAndValues, "<missing value>")
 	}
 
-	// Create a new slice to store processed key-value pairs
-	newKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
+	// Preallocate slice for efficiency (error + existing key-value pairs)
+	finalKeysAndValues := make([]interface{}, 0, len(keysAndValues)+2)
+	finalKeysAndValues = append(finalKeysAndValues, "error", err)
 
-	// Prepend the error itself
-	newKeysAndValues = append(newKeysAndValues, "error", err)
-
-	// Process key-value pairs
-	for i := 0; i < len(keysAndValues); i += 2 {
-		key, value := keysAndValues[i], keysAndValues[i+1]
-
-		if resp, ok := value.(*http.Response); ok {
-			dump, dumpErr := httputil.DumpResponse(resp, true)
-			if dumpErr != nil {
-				GetLogger().sugaredLogger.Warnw("Failed to dump HTTP response", "error", dumpErr)
-				newKeysAndValues = append(newKeysAndValues, key, fmt.Sprintf("Error dumping response: %v", dumpErr))
+	// Process *http.Response values in-place
+	for i := 1; i < len(keysAndValues); i += 2 {
+		if resp, ok := keysAndValues[i].(*http.Response); ok {
+			if dump, dumpErr := httputil.DumpResponse(resp, true); dumpErr == nil {
+				keysAndValues[i] = string(dump) // Modify in-place
 			} else {
-				newKeysAndValues = append(newKeysAndValues, key, string(dump))
+				GetLogger().sugaredLogger.Warnw("Failed to dump HTTP response", "error", dumpErr)
 			}
-		} else {
-			newKeysAndValues = append(newKeysAndValues, key, value)
 		}
 	}
 
-	// Log the error
+	// Append processed key-value pairs
+	finalKeysAndValues = append(finalKeysAndValues, keysAndValues...)
+
+	// Log and optionally panic
 	logger := GetLogger().sugaredLogger
 	if shouldPanic {
-		logger.Panicw(message, newKeysAndValues...)
+		logger.Panicw(message, finalKeysAndValues...)
 	} else {
-		logger.Errorw(message, newKeysAndValues...)
+		logger.Errorw(message, finalKeysAndValues...)
 	}
 
 	return true
