@@ -107,6 +107,10 @@ func TestCheckErr(t *testing.T) {
 	err = CheckErr(assert.AnError, false, "Error happened")
 	assert.True(t, err) // Should return true if an error occurred
 
+	assert.Panics(t, func() {
+		CheckErr(assert.AnError, true, "Error Panic happened")
+	}, "CheckErr should panic when panic=true")
+
 	logOutput := buf.String()
 	assert.Contains(t, logOutput, "Error happened") // Should log the error message
 }
